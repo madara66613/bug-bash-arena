@@ -19,10 +19,20 @@ demonstrates frontend engineering and testing skills in one product:
 - three original incident missions covering checkout, authentication, and support;
 - nine defects with evidence, expected behavior, and P0-P3 severity;
 - timed and practice modes with scoring, combo bonuses, and false-positive penalties;
+- limited signal scanner, pausable incidents, and mission performance bonuses;
+- replayable finding reviews that compare actual and expected behavior;
+- five performance achievements and a shareable final result;
 - persistent best score using `localStorage`;
 - downloadable Markdown run report for every completed session;
 - responsive keyboard-accessible interface with lightweight Web Audio feedback;
 - automated unit and UI tests plus GitHub Pages deployment.
+
+## Performance Summary
+
+Every completed run produces mission bonuses, severity accuracy, unlocked
+achievements, and an exportable QA report.
+
+![Bug Bash Arena results](output/playwright/bug-bash-arena-results.png)
 
 ## Tech Stack
 
@@ -61,7 +71,7 @@ build. The same checks run in CI for pushes and pull requests.
 src/
   App.tsx          Game state and interactive interface
   missions.ts      Mission, defect, and evidence definitions
-  game.ts          Scoring, grading, clock, and report logic
+  game.ts          Scoring, bonuses, achievements, and report logic
   *.test.ts(x)     Unit and UI coverage
 docs/
   test-plan.md     Risk-based manual test strategy
