@@ -3,6 +3,7 @@ export type GameMode = "timed" | "practice";
 export type GamePhase =
   | "briefing"
   | "playing"
+  | "paused"
   | "mission-complete"
   | "results";
 
@@ -41,4 +42,30 @@ export interface Finding {
   selectedSeverity: Severity;
   correctSeverity: boolean;
   points: number;
+}
+
+export interface MissionBonus {
+  speed: number;
+  precision: number;
+  cleanRun: number;
+  total: number;
+}
+
+export interface MissionResult {
+  missionId: Mission["id"];
+  timeRemaining: number;
+  correctSeverityCount: number;
+  wrongClicks: number;
+  bonus: MissionBonus;
+}
+
+export interface Achievement {
+  id:
+    | "perfect-triage"
+    | "clean-sweep"
+    | "hot-streak"
+    | "no-assist"
+    | "ahead-of-schedule";
+  title: string;
+  description: string;
 }

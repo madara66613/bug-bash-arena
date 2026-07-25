@@ -1,28 +1,35 @@
 import {
   ArrowRight,
+  Award,
   Bug,
   CheckCircle2,
   Clock3,
   CreditCard,
   Crosshair,
   Download,
+  Eye,
   Flame,
   Gauge,
   Headphones,
   LockKeyhole,
   Medal,
+  Pause,
   Play,
+  Radar,
   RotateCcw,
   Search,
   Send,
+  Share2,
   ShieldAlert,
   ShoppingCart,
+  Sparkles,
   Target,
   TicketCheck,
   Trophy,
   UserRound,
   Volume2,
   VolumeX,
+  X,
   XCircle,
 } from "lucide-react";
 import {
@@ -37,7 +44,9 @@ import {
   calculateAccuracy,
   calculateFindingScore,
   calculateGrade,
+  calculateMissionBonus,
   formatClock,
+  getAchievements,
   getBugById,
 } from "./game";
 import { MISSIONS, TOTAL_BUGS } from "./missions";
@@ -46,12 +55,14 @@ import type {
   GameMode,
   GamePhase,
   Mission,
+  MissionResult,
   Severity,
 } from "./types";
 import "./App.css";
 
 const SEVERITIES: Severity[] = ["P0", "P1", "P2", "P3"];
 const BEST_SCORE_KEY = "bug-bash-arena:best-score";
+const SCANNER_CHARGES = 2;
 
 function App() {
   const [mode, setMode] = useState<GameMode>("timed");
@@ -59,9 +70,16 @@ function App() {
   const [missionIndex, setMissionIndex] = useState(0);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [pendingBugId, setPendingBugId] = useState<string | null>(null);
+  const [reviewBugId, setReviewBugId] = useState<string | null>(null);
+  const [scannedBugId, setScannedBugId] = useState<string | null>(null);
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(0);
+  const [maxCombo, setMaxCombo] = useState(0);
   const [wrongClicks, setWrongClicks] = useState(0);
+  const [missionWrongClicks, setMissionWrongClicks] = useState(0);
+  const [scannerCharges, setScannerCharges] = useState(SCANNER_CHARGES);
+  const [hintsUsed, setHintsUsed] = useState(0);
+  const [missionResults, setMissionResults] = useState<MissionResult[]>([]);
   const [timeLeft, setTimeLeft] = useState(MISSIONS[0].timeLimit);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [feedback, setFeedback] = useState("Release window is waiting.");
@@ -84,6 +102,15 @@ function App() {
   const pendingBug = pendingBugId
     ? getBugById(mission, pendingBugId)
     : undefined;
+  const reviewBug = reviewBugId
+    ? getBugById(mission, reviewBugId)
+    : undefined;
+  const reviewFinding = reviewBugId
+    ? missionFindings.find((finding) => finding.bugId === reviewBugId)
+    : undefined;
+  const currentMissionResult = missionResults.find(
+    (result) => result.missionId === mission.id,
+  );
   const correctSeverityCount = findings.filter(
     (finding) => finding.correctSeverity,
   ).length;
@@ -93,6 +120,14 @@ function App() {
     wrongClicks,
   );
   const isLastMission = missionIndex === MISSIONS.length - 1;
+  const achievements = getAchievements({
+    findings,
+    wrongClicks,
+    hintsUsed,
+    maxCombo,
+    mode,
+    missionResults,
+  });
 
   useEffect(() => {
     if (
@@ -124,13 +159,49 @@ function App() {
     }
   }, [bestScore, phase, score]);
 
+  useEffect(() => {
+    if (scannedBugId === null) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setScannedBugId(null), 2600);
+
+    return () => window.clearTimeout(timeout);
+  }, [scannedBugId]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape" || pendingBugId !== null) {
+        return;
+      }
+
+      if (phase === "playing") {
+        setPhase("paused");
+        setFeedback("Incident paused.");
+      } else if (phase === "paused") {
+        setPhase("playing");
+        setFeedback("Incident resumed.");
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [pendingBugId, phase]);
+
   function startRun() {
     setMissionIndex(0);
     setFindings([]);
     setPendingBugId(null);
+    setReviewBugId(null);
+    setScannedBugId(null);
     setScore(0);
     setCombo(0);
+    setMaxCombo(0);
     setWrongClicks(0);
+    setMissionWrongClicks(0);
+    setScannerCharges(SCANNER_CHARGES);
+    setHintsUsed(0);
+    setMissionResults([]);
     setTimeLeft(MISSIONS[0].timeLimit);
     setFeedback("Incident active. Scan the product surface.");
     setPhase("playing");
@@ -142,9 +213,16 @@ function App() {
     setMissionIndex(0);
     setFindings([]);
     setPendingBugId(null);
+    setReviewBugId(null);
+    setScannedBugId(null);
     setScore(0);
     setCombo(0);
+    setMaxCombo(0);
     setWrongClicks(0);
+    setMissionWrongClicks(0);
+    setScannerCharges(SCANNER_CHARGES);
+    setHintsUsed(0);
+    setMissionResults([]);
     setTimeLeft(MISSIONS[0].timeLimit);
     setFeedback("Release window is waiting.");
   }
@@ -161,6 +239,8 @@ function App() {
     }
 
     setPendingBugId(bugId);
+    setReviewBugId(null);
+    setScannedBugId(null);
     setFeedback("Defect isolated. Assign release severity.");
     playTone(soundEnabled, 760);
   }
@@ -171,6 +251,7 @@ function App() {
     }
 
     setWrongClicks((current) => current + 1);
+    setMissionWrongClicks((current) => current + 1);
     setCombo(0);
     setFeedback(
       mode === "timed"
@@ -204,16 +285,35 @@ function App() {
       points,
     };
     const nextFindings = [...findings, finding];
+    const nextCombo = correctSeverity ? combo + 1 : 0;
+    const nextMissionFindings = nextFindings.filter(
+      (candidate) => candidate.missionId === mission.id,
+    );
     const solvedMission = mission.bugs.every((bug) =>
       nextFindings.some(
         (candidate) =>
           candidate.missionId === mission.id && candidate.bugId === bug.id,
       ),
     );
+    const missionBonus = solvedMission
+      ? calculateMissionBonus({
+          mode,
+          timeRemaining: timeLeft,
+          correctSeverityCount: nextMissionFindings.filter(
+            (candidate) => candidate.correctSeverity,
+          ).length,
+          totalBugs: mission.bugs.length,
+          wrongClicks: missionWrongClicks,
+        })
+      : null;
 
     setFindings(nextFindings);
-    setScore((currentScore) => currentScore + points);
-    setCombo(correctSeverity ? combo + 1 : 0);
+    setScore(
+      (currentScore) =>
+        currentScore + points + (missionBonus?.total ?? 0),
+    );
+    setCombo(nextCombo);
+    setMaxCombo((currentMax) => Math.max(currentMax, nextCombo));
     setPendingBugId(null);
     setFeedback(
       correctSeverity
@@ -223,7 +323,70 @@ function App() {
     playTone(soundEnabled, correctSeverity ? 920 : 280);
 
     if (solvedMission) {
+      setMissionResults((currentResults) => [
+        ...currentResults,
+        {
+          missionId: mission.id,
+          timeRemaining: mode === "timed" ? timeLeft : 0,
+          correctSeverityCount: nextMissionFindings.filter(
+            (candidate) => candidate.correctSeverity,
+          ).length,
+          wrongClicks: missionWrongClicks,
+          bonus: missionBonus!,
+        },
+      ]);
       setPhase("mission-complete");
+    }
+  }
+
+  function useScanner(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+
+    if (
+      phase !== "playing" ||
+      pendingBugId !== null ||
+      scannerCharges === 0
+    ) {
+      return;
+    }
+
+    const hiddenBugs = mission.bugs.filter(
+      (bug) => !foundBugIds.has(bug.id),
+    );
+    const target = hiddenBugs[Math.floor(Math.random() * hiddenBugs.length)];
+
+    if (!target) {
+      return;
+    }
+
+    setScannedBugId(target.id);
+    setScannerCharges((current) => current - 1);
+    setHintsUsed((current) => current + 1);
+    setCombo(0);
+    setFeedback(
+      mode === "timed"
+        ? "Signal found. Scanner cost: six seconds."
+        : "Signal found. Scanner charge consumed.",
+    );
+
+    if (mode === "timed") {
+      setTimeLeft((currentTime) => Math.max(0, currentTime - 6));
+    }
+
+    playTone(soundEnabled, 640);
+  }
+
+  function togglePause() {
+    if (pendingBugId !== null) {
+      return;
+    }
+
+    if (phase === "playing") {
+      setPhase("paused");
+      setFeedback("Incident paused.");
+    } else if (phase === "paused") {
+      setPhase("playing");
+      setFeedback("Incident resumed.");
     }
   }
 
@@ -238,7 +401,10 @@ function App() {
     setMissionIndex(nextIndex);
     setTimeLeft(MISSIONS[nextIndex].timeLimit);
     setPendingBugId(null);
+    setReviewBugId(null);
+    setScannedBugId(null);
     setCombo(0);
+    setMissionWrongClicks(0);
     setFeedback("New incident loaded. Begin investigation.");
     setPhase("playing");
   }
@@ -249,6 +415,9 @@ function App() {
       score,
       wrongClicks,
       mode,
+      hintsUsed,
+      maxCombo,
+      missionResults,
     });
     const blob = new Blob([report], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -260,6 +429,19 @@ function App() {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+  }
+
+  async function copyResult() {
+    const result = `Bug Bash Arena: ${grade} rank, ${score.toLocaleString()} points, ${findings.length}/${TOTAL_BUGS} defects, ${calculateAccuracy(findings)}% severity accuracy.`;
+
+    try {
+      await navigator.clipboard.writeText(result);
+      setFeedback("Result copied to clipboard.");
+      playTone(soundEnabled, 720);
+    } catch {
+      setFeedback("Clipboard unavailable. Export the run report instead.");
+      playTone(soundEnabled, 240);
+    }
   }
 
   return (
@@ -313,15 +495,53 @@ function App() {
             value={mode === "timed" ? formatClock(timeLeft) : "Open"}
             danger={mode === "timed" && timeLeft <= 15}
           />
-          <button
-            type="button"
-            className="icon-control"
-            onClick={() => setSoundEnabled((current) => !current)}
-            title={soundEnabled ? "Mute game sounds" : "Enable game sounds"}
-            aria-label={soundEnabled ? "Mute game sounds" : "Enable game sounds"}
-          >
-            {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
-          </button>
+          <div className="control-cluster">
+            <button
+              type="button"
+              className={`icon-control scanner-control ${
+                scannedBugId ? "is-active" : ""
+              }`}
+              onClick={useScanner}
+              disabled={
+                phase !== "playing" ||
+                pendingBugId !== null ||
+                scannerCharges === 0
+              }
+              title="Use signal scanner"
+              aria-label={`Use signal scanner (${scannerCharges} remaining)`}
+            >
+              <Radar size={18} />
+              <span>{scannerCharges}</span>
+            </button>
+            <button
+              type="button"
+              className="icon-control"
+              onClick={togglePause}
+              disabled={
+                !["playing", "paused"].includes(phase) ||
+                pendingBugId !== null
+              }
+              title={phase === "paused" ? "Resume run" : "Pause run"}
+              aria-label={phase === "paused" ? "Resume run" : "Pause run"}
+            >
+              {phase === "paused" ? (
+                <Play size={18} fill="currentColor" />
+              ) : (
+                <Pause size={18} fill="currentColor" />
+              )}
+            </button>
+            <button
+              type="button"
+              className="icon-control"
+              onClick={() => setSoundEnabled((current) => !current)}
+              title={soundEnabled ? "Mute game sounds" : "Enable game sounds"}
+              aria-label={
+                soundEnabled ? "Mute game sounds" : "Enable game sounds"
+              }
+            >
+              {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -368,7 +588,9 @@ function App() {
                   <button
                     key={bug.id}
                     type="button"
-                    className={`bug-hotspot ${finding ? "is-found" : ""}`}
+                    className={`bug-hotspot ${
+                      finding ? "is-found" : ""
+                    } ${scannedBugId === bug.id ? "is-scanned" : ""}`}
                     style={{
                       left: `${bug.hotspot.left}%`,
                       top: `${bug.hotspot.top}%`,
@@ -413,6 +635,26 @@ function App() {
                 </div>
               )}
 
+              {phase === "paused" && (
+                <div className="arena-overlay pause-overlay">
+                  <Pause size={34} fill="currentColor" />
+                  <span>Incident paused</span>
+                  <h2>Investigation on hold</h2>
+                  <p>The release clock is frozen until the run resumes.</p>
+                  <button
+                    type="button"
+                    className="primary-action"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      togglePause();
+                    }}
+                  >
+                    <Play size={17} fill="currentColor" />
+                    Resume incident
+                  </button>
+                </div>
+              )}
+
               {phase === "mission-complete" && (
                 <div className="arena-overlay complete-overlay">
                   <Medal size={36} />
@@ -422,6 +664,26 @@ function App() {
                     {missionFindings.filter((finding) => finding.correctSeverity).length}
                     /{mission.bugs.length} severities triaged correctly.
                   </p>
+                  {currentMissionResult && (
+                    <div className="bonus-strip" aria-label="Mission bonus">
+                      <div>
+                        <span>Speed</span>
+                        <strong>+{currentMissionResult.bonus.speed}</strong>
+                      </div>
+                      <div>
+                        <span>Precision</span>
+                        <strong>+{currentMissionResult.bonus.precision}</strong>
+                      </div>
+                      <div>
+                        <span>Clean run</span>
+                        <strong>+{currentMissionResult.bonus.cleanRun}</strong>
+                      </div>
+                      <div className="bonus-total">
+                        <span>Bonus</span>
+                        <strong>+{currentMissionResult.bonus.total}</strong>
+                      </div>
+                    </div>
+                  )}
                   <button
                     type="button"
                     className="primary-action"
@@ -445,6 +707,20 @@ function App() {
                     {findings.length}/{TOTAL_BUGS} defects found with{" "}
                     {calculateAccuracy(findings)}% severity accuracy.
                   </p>
+                  <div className="result-stat-strip">
+                    <span>
+                      <Flame size={14} />
+                      Best combo <strong>x{maxCombo}</strong>
+                    </span>
+                    <span>
+                      <Radar size={14} />
+                      Scans <strong>{hintsUsed}</strong>
+                    </span>
+                    <span>
+                      <Award size={14} />
+                      Awards <strong>{achievements.length}</strong>
+                    </span>
+                  </div>
                   <div className="result-actions">
                     <button
                       type="button"
@@ -456,6 +732,17 @@ function App() {
                     >
                       <Download size={17} />
                       Export report
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-action"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void copyResult();
+                      }}
+                    >
+                      <Share2 size={17} />
+                      Copy result
                     </button>
                     <button
                       type="button"
@@ -479,8 +766,8 @@ function App() {
             <strong>{feedback}</strong>
             <span>
               {mode === "timed"
-                ? `False positives: ${wrongClicks} (-${wrongClicks * 4}s)`
-                : `False positives: ${wrongClicks}`}
+                ? `False positives: ${wrongClicks} · Scans: ${hintsUsed}`
+                : `False positives: ${wrongClicks} · Scans: ${hintsUsed}`}
             </span>
           </div>
         </section>
@@ -545,6 +832,85 @@ function App() {
                 </div>
               </div>
             </section>
+          ) : reviewBug && reviewFinding ? (
+            <section className="triage-panel review-panel" aria-live="polite">
+              <div className="panel-heading-row">
+                <div className="panel-kicker">
+                  <Eye size={16} />
+                  Finding review
+                </div>
+                <button
+                  type="button"
+                  className="panel-close"
+                  onClick={() => setReviewBugId(null)}
+                  title="Close finding review"
+                  aria-label="Close finding review"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="review-meta">
+                <span className="bug-id">{reviewBug.id}</span>
+                <span
+                  className={`severity-label severity-${reviewBug.severity}`}
+                >
+                  {reviewBug.severity}
+                </span>
+              </div>
+              <h2>{reviewBug.title}</h2>
+              <dl>
+                <div>
+                  <dt>Actual</dt>
+                  <dd>{reviewBug.actual}</dd>
+                </div>
+                <div className="expected-row">
+                  <dt>Expected</dt>
+                  <dd>{reviewBug.expected}</dd>
+                </div>
+                <div>
+                  <dt>Evidence</dt>
+                  <dd>{reviewBug.evidence}</dd>
+                </div>
+              </dl>
+              <div className="review-verdict">
+                {reviewFinding.correctSeverity ? (
+                  <CheckCircle2 size={17} />
+                ) : (
+                  <XCircle size={17} />
+                )}
+                <span>
+                  Selected {reviewFinding.selectedSeverity}
+                  {!reviewFinding.correctSeverity &&
+                    ` · Expected ${reviewBug.severity}`}
+                </span>
+                <strong>+{reviewFinding.points}</strong>
+              </div>
+            </section>
+          ) : phase === "results" ? (
+            <section className="achievement-panel">
+              <div className="panel-kicker">
+                <Sparkles size={16} />
+                Run achievements
+              </div>
+              <h2>{achievements.length} awards unlocked</h2>
+              <div className="achievement-list">
+                {achievements.length > 0 ? (
+                  achievements.map((achievement) => (
+                    <div key={achievement.id} className="achievement-row">
+                      <Award size={18} />
+                      <div>
+                        <strong>{achievement.title}</strong>
+                        <span>{achievement.description}</span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="achievement-empty">
+                    Complete more of the incident to unlock run awards.
+                  </div>
+                )}
+              </div>
+            </section>
           ) : (
             <>
               <section className="brief-panel">
@@ -580,9 +946,17 @@ function App() {
                     );
 
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={bug.id}
                         className={`finding-row ${finding ? "is-recorded" : ""}`}
+                        onClick={() => finding && setReviewBugId(bug.id)}
+                        disabled={!finding}
+                        aria-label={
+                          finding
+                            ? `Review finding ${bug.id}`
+                            : "Undiscovered defect"
+                        }
                       >
                         <span className="finding-state">
                           {finding ? (
@@ -606,7 +980,7 @@ function App() {
                           </span>
                         </div>
                         {finding && <b>+{finding.points}</b>}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
