@@ -1,32 +1,79 @@
-# React + TypeScript + Vite
+# Bug Bash Arena
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+[![CI](https://github.com/madara66613/bug-bash-arena/actions/workflows/ci.yml/badge.svg)](https://github.com/madara66613/bug-bash-arena/actions/workflows/ci.yml)
+[![Deploy](https://github.com/madara66613/bug-bash-arena/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/madara66613/bug-bash-arena/actions/workflows/deploy-pages.yml)
 
-Currently, two official plugins are available:
+**Bug Bash Arena** is a browser game where the player investigates realistic
+product screens, finds hidden defects, and assigns release severity before the
+incident timer expires.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+**[Play the live game](https://madara66613.github.io/bug-bash-arena/)**
 
-## React Compiler
+![Bug Bash Arena gameplay](output/playwright/bug-bash-arena.png)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Why This Project
 
-## Expanding the Oxlint configuration
+The project turns practical QA work into a small, replayable game. It
+demonstrates frontend engineering and testing skills in one product:
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+- three original incident missions covering checkout, authentication, and support;
+- nine defects with evidence, expected behavior, and P0-P3 severity;
+- timed and practice modes with scoring, combo bonuses, and false-positive penalties;
+- persistent best score using `localStorage`;
+- downloadable Markdown run report for every completed session;
+- responsive keyboard-accessible interface with lightweight Web Audio feedback;
+- automated unit and UI tests plus GitHub Pages deployment.
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+## Tech Stack
+
+- React 19 and TypeScript
+- Vite
+- Vitest and Testing Library
+- Lucide icons
+- Oxlint
+- GitHub Actions and GitHub Pages
+
+## Run Locally
+
+```bash
+git clone https://github.com/madara66613/bug-bash-arena.git
+cd bug-bash-arena
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Open the URL printed by Vite, select a mode, and investigate the highlighted
+product surface. A correct severity assignment earns more points and increases
+the combo multiplier.
+
+## Quality Checks
+
+```bash
+npm run check
+```
+
+This runs linting, TypeScript validation, the test suite, and the production
+build. The same checks run in CI for pushes and pull requests.
+
+## Project Structure
+
+```text
+src/
+  App.tsx          Game state and interactive interface
+  missions.ts      Mission, defect, and evidence definitions
+  game.ts          Scoring, grading, clock, and report logic
+  *.test.ts(x)     Unit and UI coverage
+docs/
+  test-plan.md     Risk-based manual test strategy
+```
+
+## Portfolio Notes
+
+This project is intentionally built as a complete small product rather than a
+single visual demo. The domain model, deterministic scoring functions,
+accessible controls, tests, CI workflow, deployment pipeline, and product
+documentation are all part of the repository.
+
+## License
+
+[MIT](LICENSE)

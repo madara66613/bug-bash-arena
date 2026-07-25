@@ -1,13 +1,17 @@
 {
   "name": "bug-bash-arena",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "A playable QA bug-hunting game built with React and TypeScript.",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc -b",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build"
   },
   "dependencies": {
     "lucide-react": "^1.26.0",
@@ -26,5 +30,14 @@
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
     "vitest": "^4.1.10"
-  }
+  },
+  "keywords": [
+    "game",
+    "qa",
+    "software-testing",
+    "react",
+    "typescript"
+  ],
+  "author": "Denis Dacenko",
+  "license": "MIT"
 }
